@@ -2,11 +2,21 @@
     "port": 5001,
     "octoprintAddress": "127.0.0.1",
     "octoprintApiKey": "mutokMWSBl29PrN7ts_r8MsUIMsipdYbw74B5IxEcrs",
-    "smartHomeProtocolProxy": true,
-    "plugAddress": "192.168.1.109",
     "cameraOffPath": "offline.jpg",
     "cameraErrorPath": "error.jpg",
     "cameraRetryInterval": 1000,
+    "stateCheckInterval": 5000,
+    "psus": [
+        {
+            "name": "Derek",
+            "type": "smarthomeprotocol",
+            "address": "192.168.1.109",
+            "triggers": [
+                "light:0",
+                "camera:0"
+            ]
+        }
+    ],
     "lights": [
         {
             "name": "Light",
@@ -15,7 +25,7 @@
     ],
     "cameras": [
         {
-            "name": "Z-Axis",
+            "name": "Z-Axis Camera",
             "path": "/dev/video0",
             "outputArgs": [
                 "-s", "1280x720",

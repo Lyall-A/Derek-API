@@ -1,9 +1,10 @@
 const net = require("net");
-const childProcess = require("child_process");
 const fs = require("fs");
-const { EventEmitter } = require("events");
 
 const { Server, Router } = require("http-js");
+const { sendSmartHomeProtocolCommand } = require("./utils/tp-link-smart-home-protocol");
+const { getGpioValue, setGpio } = require("./utils/gpio.js");
+const CameraStream = require("./utils/CameraStream");
 
 const config = require("./config.json");
 
@@ -16,6 +17,68 @@ const cameraErrorPath = fs.existsSync(config.cameraErrorPath) ? fs.readFileSync(
 
 const server = new Server();
 const { router } = server;
+
+// PSU
+
+router.get("/psu/:psu/", async (req, res, next, params) => {
+    if (!config.psus?.[params.psu]) return next();
+    try {
+        res.json(await getPSU(params.psu));
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
+
+router.post("/psu/:psu/on/", async (req, res, next, params) => {
+    if (!config.psus?.[params.psu]) return next();
+    try {
+        await setPSU(params.psu, true);
+        res.sendStatus(204);
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
+
+router.post("/psu/:psu/off/", async (req, res, next, params) => {
+    if (!config.psus?.[params.psu]) return next();
+    try {
+        await setPSU(params.psu, false);
+        res.sendStatus(204);
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
+
+// Light
+
+router.get("/light/:light/", async (req, res, next, params) => {
+    if (!config.lights?.[params.light]) return next();
+    try {
+        res.json(await getLight(params.light))
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
+
+router.post("/light/:light/on/", async (req, res, next, params) => {
+    if (!config.lights?.[params.light]) return next();
+    try {
+        await setLight(params.light, true);
+        res.sendStatus(204);
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
+
+router.post("/light/:light/off/", async (req, res, next, params) => {
+    if (!config.lights?.[params.light]) return next();
+    try {
+        await setLight(params.light, false);
+        res.sendStatus(204);
+    } catch (err) {
+        res.sendStatus(500);
+    }
+});
 
 // Camera
 
@@ -114,68 +177,6 @@ router.get("/camera/:camera/still/", (req, res, next, params) => {
     }
 });
 
-// Light
-
-router.get("/light/:light/", async (req, res, next, params) => {
-    if (!config.lights?.[params.light]) return next();
-    try {
-        res.json(await getLight(params.light))
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/light/:light/on/", async (req, res, next, params) => {
-    if (!config.lights?.[params.light]) return next();
-    try {
-        await setLight(params.light, true);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/light/:light/off/", async (req, res, next, params) => {
-    if (!config.lights?.[params.light]) return next();
-    try {
-        await setLight(params.light, false);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-// PSU
-
-router.get("/psu/:psu/", async (req, res, next, params) => {
-    if (!config.psus?.[params.psu]) return next();
-    try {
-        res.json(await getPSU(params.psu));
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/psu/:psu/on/", async (req, res, next, params) => {
-    if (!config.psus?.[params.psu]) return next();
-    try {
-        await setPSU(params.psu, true);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/psu/:psu/off/", async (req, res, next, params) => {
-    if (!config.psus?.[params.psu]) return next();
-    try {
-        await setPSU(params.psu, false);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
 router.any("*", (req, res) => {
     res.sendStatus(404);
 });
@@ -185,110 +186,56 @@ server.listen(config.port, () => console.log(`Server is running at :${config.por
 
 // Controls
 
-function getCamera(cameraIndex) {
-    const camera = config.cameras?.[cameraIndex];
-
-    const cameraStream = cameraStreams[cameraIndex];
-
-    return {
-        state: cameraStream.state,
-        startDate: cameraStream.startDate,
+// Checks for state changes from elsewhere
+if (config.stateCheckInterval) {
+    const states = {
+        psus: {},
+        lights: {},
+        cameras: {},
     };
-}
 
-function setCamera(cameraIndex, value) {
-    const camera = config.cameras?.[cameraIndex];
-
-    cameraStreams[cameraIndex][value ? "start" : "stop"]();
-
-    console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} turned ${value ? "on" : "off"}`);
-
-    if (camera.triggers) runTriggers(camera.triggers, value);
-}
-
-function getLight(lightIndex) {
-    const light = config.lights?.[lightIndex];
-
-    return {
-        state: getGpioValue(light.gpio)
-    };
-}
-
-function setLight(lightIndex, value) {
-    const light = config.lights?.[lightIndex];
-
-    setGpio(light.gpio, value);
-    
-    console.log("[Light]", `${light.name ? `${light.name} (${lightIndex})` : lightIndex} turned ${value ? "on" : "off"}`);
-    
-    if (light.triggers) runTriggers(light.triggers, value);
-}
-
-function getPSU(psuIndex) {
-    const psu = config.psus?.[psuIndex];
-
-    if (!psu.type || psu.type === "gpio") {
-        return {
-            state: getGpioValue(psu.gpio)
-        };
-    } else if (psu.type === "smarthomeprotocol") {
-        return new Promise(async (resolve, reject) => {
-            const data = await sendSmartHomeProtocolCommand(psu.address, { system: { get_sysinfo: null } }).catch(err => {
-                console.log("Error sending Smart Home Protocol command:", err);
-                return reject();
-            });
-        
-            const info = data?.system?.get_sysinfo;
-            if (!info || info.err_code) {
-                console.log("Smart Home Protocol response isn't correct:", info);
-                return reject();
-            }
-
-            resolve({
-                state: info.relay_state,
-                onSince: info.relay_state ? new Date(Math.floor(Date.now() / 1000 - info.on_time) * 1000) : null,
-                mac: info.mac
-            });
-        });
-    }
-}
-
-function setPSU(psuIndex, value) {
-    return new Promise(async (resolve, reject) => {
-        const psu = config.psus?.[psuIndex];
-
-        if (!psu.type || psu.type === "gpio") {
-            setGpio(psu.gpio, value);
-        } else if (psu.type === "smarthomeprotocol") {
-            const data = await sendSmartHomeProtocolCommand(psu.address, { system: { set_relay_state: { state: value ? 1 : 0 } } }).catch(err => {
-                console.log("Error sending Smart Home Protocol command:", err);
-                return reject();
-            });
-        
-            const info = data?.system?.set_relay_state;
-            if (!info || info.err_code) {
-                console.log("Smart Home Protocol response isn't correct:", info);
-                return reject();
-            }
+    (async function checkStates() {
+        if (config.psus) for (const psuIndex in config.psus) {
+            const psu = config.psus[psuIndex];
+            try {
+                const { state } = await getPSU(psuIndex);
+                if (states["psus"][psuIndex] !== state && psu.triggers) await runTriggers(psu.triggers, state);
+                states["psus"][psuIndex] = state;
+            } catch (err) { }
         }
 
-        resolve();
+        if (config.light) for (const lightIndex in config.lights) {
+            const light = config.lights[lightIndex];
+            try {
+                const { state } = await getLight(lightIndex);
+                if (states["lights"][lightIndex] !== state && light.triggers) await runTriggers(light.triggers, state);
+                states["lights"][lightIndex] = state;
+            } catch (err) { }
+        }
 
-        console.log("[PSU]", `${psu.name ? `${psu.name} (${psuIndex})` : psuIndex} turned ${value ? "on" : "off"}`);
+        if (config.cameras) for (const cameraIndex in config.cameras) {
+            const camera = config.cameras[cameraIndex];
+            try {
+                const { state } = await getCamera(cameraIndex);
+                if (states["cameras"][cameraIndex] !== state && camera.triggers) await runTriggers(camera.triggers, state);
+                states["cameras"][cameraIndex] = state;
+            } catch (err) { }
+        }
 
-        if (psu.triggers) runTriggers(psu.triggers, value);
-    });
+        setTimeout(checkStates, config.stateCheckInterval ?? 5000);
+    })();
 }
 
+// Sync stuff together
 async function runTriggers(triggers, value) {
     for (const trigger of triggers) {
         try {
             const [type, index, reversed] = trigger.split(":");
             const isReversed = (reversed === "1" || reversed === "true") ? true : false;
             
-            if (type === "camera") await setCamera(index, isReversed ? !value : value); else
-            if (type === "light") await setLight(index, isReversed ? !value : value); else
             if (type === "psu") await setPSU(index, isReversed ? !value : value); else
+            if (type === "light") await setLight(index, isReversed ? !value : value); else
+            if (type === "camera") await setCamera(index, isReversed ? !value : value); else
             throw new Error(`Unknown type '${type}'`);
         } catch (err) {
             console.log(`Failed to run trigger '${trigger}': ${err}`);
@@ -296,99 +243,138 @@ async function runTriggers(triggers, value) {
     }
 }
 
-// Camera streams
-
-class CameraStream extends EventEmitter {
-    constructor(camera, options = { }) {
-        super();
-        
-        this.camera = camera;
-        if (options.ffmpegPath) this.ffmpegPath = options.ffmpegPath;
-        if (options.storeLastFrame) this.storeLastFrame = options.storeLastFrame;
-        if (options.ffmpegInputArgs) this.ffmpegInputArgs = options.ffmpegInputArgs;
-        if (options.ffmpegOutputArgs) this.ffmpegOutputArgs = options.ffmpegOutputArgs;
-        if (options.logs) this.logs = options.logs;
-        if (options.logSize) this.logSize = options.logSize;
-        this.options = options;
-    }
-
-    camera = null;
-    ffmpegPath = "ffmpeg";
-    storeLastFrame = false;
-    ffmpegInputArgs = [];
-    ffmpegOutputArgs = [];
-    logs = false;
-    logSize = 1024;
+function getPSU(psuIndex) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const psu = config.psus[psuIndex];
     
-    log = "";
-    ffmpegProcess = null;
-    lastFrame = null;
-    state = 0;
-    startDate = null;
-
-    start() {
-        if (this.state === 1) return;
-
-        this.ffmpegProcess = childProcess.spawn(this.ffmpegPath ?? "ffmpeg", [
-            ...this.ffmpegInputArgs ?? [],
-            "-i", this.camera.path,
-            ...this.ffmpegOutputArgs ?? [],
-            "-c:v", "mjpeg",
-            "-f", "mjpeg",
-            "-"
-        ]);
-
-        const frameArrayBuffer = [];
-
-        this.ffmpegProcess.on("spawn", () => {
-            this.state = 1;
-            this.startDate = new Date();
-            this.emit("start");
-        });
-
-        this.ffmpegProcess.stdout.on("data", data => {
-            frameArrayBuffer.push(data);
-
-            if (data[data.byteLength - 2] === 0xFF && data[data.byteLength - 1] === 0xD9) {
-                const frameBuffer = Buffer.concat(frameArrayBuffer);
-                frameArrayBuffer.length = 0;
-                if (this.storeLastFrame) this.lastFrame = frameBuffer;
-                this.emit("frame", frameBuffer);
+            if (!psu.type || psu.type === "gpio") {
+                resolve({
+                    state: getGpioValue(psu.gpio)
+                });
+            } else if (psu.type === "smarthomeprotocol") {
+                const data = await sendSmartHomeProtocolCommand(psu.address, { system: { get_sysinfo: null } }).catch(err => {
+                    console.log("Error sending Smart Home Protocol command:", err);
+                    return reject();
+                });
+            
+                const info = data?.system?.get_sysinfo;
+                if (!info || info.err_code) {
+                    console.log("Smart Home Protocol response isn't correct:", info);
+                    return reject();
+                }
+    
+                resolve({
+                    state: info.relay_state,
+                    onSince: info.relay_state ? new Date(Math.floor(Date.now() / 1000 - info.on_time) * 1000) : null,
+                    mac: info.mac
+                });
             }
-        });
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
 
-        this.ffmpegProcess.stderr.on("data", data => {
-            if (!this.logs) return;
-            const log = data.toString();
-            this.log += log;
-            if (this.logSize && this.log.length > this.logSize) this.log = this.log.slice(-this.options.logSize);
-        });
-
-        this.ffmpegProcess.on("error", err => {
-            this.state = 2;
-            this.emit("error", err);
-        });
-        
-        this.ffmpegProcess.on("close", code => {
-            if (this.state === 1) {
-                if (code > 0) {
-                    this.state = 2;
-                    this.emit("error", this.log);
-                } else {
-                    this.state = 0;
+function setPSU(psuIndex, value) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const psu = config.psus[psuIndex];
+    
+            if (!psu.type || psu.type === "gpio") {
+                setGpio(psu.gpio, value);
+            } else if (psu.type === "smarthomeprotocol") {
+                const data = await sendSmartHomeProtocolCommand(psu.address, { system: { set_relay_state: { state: value ? 1 : 0 } } }).catch(err => {
+                    console.log("Error sending Smart Home Protocol command:", err);
+                    return reject();
+                });
+            
+                const info = data?.system?.set_relay_state;
+                if (!info || info.err_code) {
+                    console.log("Smart Home Protocol response isn't correct:", info);
+                    return reject();
                 }
             }
-            this.emit("close", code);
-        });
-    }
-
-    stop() {
-        if (this.ffmpegProcess) {
-            this.ffmpegProcess.kill("SIGKILL");
-            this.state = 0;
+    
+            resolve();
+    
+            console.log("[PSU]", `${psu.name ? `${psu.name} (${psuIndex})` : psuIndex} turned ${value ? "on" : "off"}`);
+    
+            if (psu.triggers) await runTriggers(psu.triggers, value);
+        } catch (err) {
+            reject(err);
         }
-    }
+    });
 }
+
+function getLight(lightIndex) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const light = config.lights[lightIndex];
+    
+            resolve({
+                state: getGpioValue(light.gpio)
+            });
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function setLight(lightIndex, value) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const light = config.lights[lightIndex];
+    
+            setGpio(light.gpio, value);
+            
+            resolve();
+    
+            console.log("[Light]", `${light.name ? `${light.name} (${lightIndex})` : lightIndex} turned ${value ? "on" : "off"}`);
+    
+            if (light.triggers) await runTriggers(light.triggers, value);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function getCamera(cameraIndex) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const camera = config.cameras[cameraIndex];
+            
+            const cameraStream = cameraStreams[cameraIndex];
+            
+            resolve({
+                state: cameraStream.state,
+                startDate: cameraStream.startDate,
+            });
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+function setCamera(cameraIndex, value) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const camera = config.cameras[cameraIndex];
+            
+            cameraStreams[cameraIndex][value ? "start" : "stop"]();
+            
+            resolve();
+            
+            console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} turned ${value ? "on" : "off"}`);
+            
+            if (camera.triggers) await runTriggers(camera.triggers, value);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+// Camera streams
 
 if (config.cameras) for (const cameraIndex in config.cameras) {
     const camera = config.cameras[cameraIndex];
@@ -443,29 +429,6 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
     cameraClients[cameraIndex] = [];
 }
 
-// GPIO
-
-function setGpio(pin, value, direction = "output") {
-    const writeDirection = direction === "output" ? "out" : direction === "input" ? "in" : "out";
-    const writeValue = `${value === false ? 0 :  value === true ? 1 : value}\n`;
-
-    // Export pin
-    if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) {
-        fs.writeFileSync("/sys/class/gpio/export", `${pin}`);
-    }
-    // Set direction
-    if (fs.readFileSync(`/sys/class/gpio/gpio${pin}/direction`, "utf-8") !== writeDirection) {
-        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `${writeDirection}`);
-    }
-    // Set value
-    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${writeValue}`);
-}
-
-function getGpioValue(pin) {
-    if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) return null;
-    return parseInt(fs.readFileSync(`/sys/class/gpio/gpio${pin}/value`, "utf-8"));
-}
-
 // TP-Link Smart Home Protocol Proxy
 
 if (config.smartHomeProtocolProxy) {
@@ -489,49 +452,4 @@ if (config.smartHomeProtocolProxy) {
     });
 
     smartHomeProtocolProxy.listen(9999, () => console.log(`TP-Link Smart Home protocol proxy is running at :${config.plugPort ?? 9999}`));
-}
-
-// TP-Link Smart Home Protocol
-
-function sendSmartHomeProtocolCommand(address, command) {
-    return new Promise((resolve, reject) => {
-        const connection = net.createConnection({ host: address, port: 9999 });
-        connection.write(smartHomeProtocolEncrypt(JSON.stringify(command)));
-        let data;
-        connection.on("data", i => data = Buffer.concat(data ? [data, i] : [i]));
-        connection.on("end", () => resolve(JSON.parse(smartHomeProtocolDecrypt(data))));
-        connection.on("error", err => reject(err));
-    });
-}
-
-function smartHomeProtocolEncrypt(string) {
-    let key = 171;
-    const length = string.length;
-    const result = new Uint8Array(4 + length);
-
-    result[0] = (length >> 24) & 0xFF;
-    result[1] = (length >> 16) & 0xFF;
-    result[2] = (length >> 8) & 0xFF;
-    result[3] = length & 0xFF;
-
-    for (let i = 0; i < string.length; i++) {
-        const a = key ^ string.charCodeAt(i);
-        key = a;
-        result[4 + i] = a;
-    }
-
-    return result;
-}
-
-function smartHomeProtocolDecrypt(array) {
-    let key = 171;
-    let result = "";
-
-    for (let i = 4; i < array.length; i++) {
-        const a = key ^ array[i];
-        key = array[i];
-        result += String.fromCharCode(a);
-    }
-
-    return result;
 }
