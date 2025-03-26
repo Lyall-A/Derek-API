@@ -338,14 +338,14 @@ function setGpio(pin, value, direction = "output") {
 
     // Export pin
     if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) {
-        fs.writeFileSync("/sys/class/gpio/export", pin);
+        fs.writeFileSync("/sys/class/gpio/export", `${pin}`);
     }
     // Set direction
     if (fs.readFileSync(`/sys/class/gpio/gpio${pin}/direction`, "utf-8") !== writeDirection) {
-        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, writeDirection);
+        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `${writeDirection}`);
     }
     // Set value
-    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, writeValue);
+    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${pin}`);
 }
 
 function getGpioValue(pin) {
