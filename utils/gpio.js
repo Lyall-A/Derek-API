@@ -6,7 +6,7 @@ function setGpio(pin, value, direction = "output") {
 
     // Export pin
     if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) {
-        fs.writeFileSync("/sys/class/gpio/export", `${pin}`);
+        fs.writeFileSync("/sys/class/gpio/export", `${pin}\n`);
     }
 
     // Set direction
