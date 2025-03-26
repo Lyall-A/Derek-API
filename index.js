@@ -195,6 +195,12 @@ class CameraStream extends EventEmitter {
         super();
         
         this.camera = camera;
+        if (options.ffmpegPath) this.ffmpegPath = options.ffmpegPath;
+        if (options.storeLastFrame) this.storeLastFrame = options.storeLastFrame;
+        if (options.ffmpegInputArgs) this.ffmpegInputArgs = options.ffmpegInputArgs;
+        if (options.ffmpegOutputArgs) this.ffmpegOutputArgs = options.ffmpegOutputArgs;
+        if (options.logs) this.logs = options.logs;
+        if (options.logSize) this.logSize = options.logSize;
         this.options = options;
     }
 
