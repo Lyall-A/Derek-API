@@ -16,7 +16,13 @@
     "cameras": [
         {
             "name": "Z-Axis",
-            "path": "/dev/video0"
+            "path": "/dev/video0",
+            "outputArgs": [
+                "-s", "1280x720",
+                "-r", "20",
+                "-q:v", "1",
+                "-an"
+            ]
         }
     ]
 }
