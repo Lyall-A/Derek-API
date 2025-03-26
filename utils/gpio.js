@@ -1,7 +1,7 @@
 const fs = require("fs");
 
 function setGpio(pin, value, direction = "output") {
-    const writeDirection = direction === "output" ? "out" : direction === "input" ? "in" : "out";
+    const writeDirection = `${direction === "output" ? "out" : direction === "input" ? "in" : "out"}\n`;
     const writeValue = `${value === false ? 0 :  value === true ? 1 : value}\n`;
 
     // Export pin
