@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "http-js": "github:Lyall-A/HTTP-JS"
+  }
+}

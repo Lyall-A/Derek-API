@@ -1,0 +1,22 @@
+{
+    "port": 5001,
+    "octoprintAddress": "127.0.0.1",
+    "octoprintApiKey": "mutokMWSBl29PrN7ts_r8MsUIMsipdYbw74B5IxEcrs",
+    "smartHomeProtocolProxy": true,
+    "plugAddress": "192.168.1.109",
+    "cameraOffPath": "offline.jpg",
+    "cameraErrorPath": "error.jpg",
+    "cameraRetryInterval": 1000,
+    "lights": [
+        {
+            "name": "Light",
+            "gpio": 73
+        }
+    ],
+    "cameras": [
+        {
+            "name": "Z-Axis",
+            "path": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        }
+    ]
+}
