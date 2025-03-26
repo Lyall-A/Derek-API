@@ -10,9 +10,9 @@ function setGpio(pin, value, direction = "output") {
     }
 
     // Set direction
-    if (fs.readFileSync(`/sys/class/gpio/gpio${pin}/direction`, "utf-8") !== writeDirection) {
-        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `${writeDirection}`);
-    }
+    // if (fs.readFileSync(`/sys/class/gpio/gpio${pin}/direction`, "utf-8") !== writeDirection) {
+    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `${writeDirection}`);
+    // }
 
     // Set value
     fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${writeValue}`);
