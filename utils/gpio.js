@@ -7,8 +7,9 @@ function setGpio(pin, value, direction = "output") {
     }
 
     // Set direction
+    const writeDirection = direction === "output" ? "out" : direction === "input" ? "in" : "out";
     if (fs.readFileSync(`/sys/class/gpio/gpio${pin}/direction`, "utf-8") !== writeDirection) {
-        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, direction === "output" ? "out" : direction === "input" ? "in" : "out");
+        fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, writeDirection);
     }
     
     // Set value
