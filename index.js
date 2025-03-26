@@ -199,9 +199,9 @@ function getCamera(cameraIndex) {
 function setCamera(cameraIndex, value) {
     const camera = config.cameras?.[cameraIndex];
 
-    cameraStreams[cameraIndex][value ? start : stop]();
+    cameraStreams[cameraIndex][value ? "start" : "stop"]();
 
-    console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} turned on`);
+    console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} turned ${value ? "on" : "off"}`);
 
     if (camera.triggers) runTriggers(camera.triggers, value);
 }
@@ -219,7 +219,7 @@ function setLight(lightIndex, value) {
 
     setGpio(light.gpio, value);
     
-    console.log("[Light]", `${light.name ? `${light.name} (${lightIndex})` : lightIndex} turned on`);
+    console.log("[Light]", `${light.name ? `${light.name} (${lightIndex})` : lightIndex} turned ${value ? "on" : "off"}`);
     
     if (light.triggers) runTriggers(light.triggers, value);
 }
@@ -246,7 +246,7 @@ function getPSU(psuIndex) {
 
             resolve({
                 state: info.relay_state,
-                onSince: info.relay_state ? Math.floor(Date.now() / 1000 - info.on_time) * 1000 : null,
+                onSince: info.relay_state ? new Date(Math.floor(Date.now() / 1000 - info.on_time) * 1000) : null,
                 mac: info.mac
             });
         });
@@ -254,12 +254,12 @@ function getPSU(psuIndex) {
 }
 
 function setPSU(psuIndex, value) {
-    const psu = config.psus?.[psuIndex];
+    return new Promise(async (resolve, reject) => {
+        const psu = config.psus?.[psuIndex];
 
-    if (!psu.type || psu.type === "gpio") {
-        setGpio(psu.gpio, value);
-    } else if (psu.type === "smarthomeprotocol") {
-        return new Promise(async (resolve, reject) => {
+        if (!psu.type || psu.type === "gpio") {
+            setGpio(psu.gpio, value);
+        } else if (psu.type === "smarthomeprotocol") {
             const data = await sendSmartHomeProtocolCommand(psu.address, { system: { set_relay_state: { state: value ? 1 : 0 } } }).catch(err => {
                 console.log("Error sending Smart Home Protocol command:", err);
                 return reject();
@@ -270,24 +270,29 @@ function setPSU(psuIndex, value) {
                 console.log("Smart Home Protocol response isn't correct:", info);
                 return reject();
             }
+        }
 
-            resolve();
-        });
-    }
-    
-    console.log("[PSU]", `${psu.name ? `${psu.name} (${psuIndex})` : psuIndex} turned on`);
+        resolve();
 
-    if (psu.triggers) runTriggers(psu.triggers, value);
+        console.log("[PSU]", `${psu.name ? `${psu.name} (${psuIndex})` : psuIndex} turned ${value ? "on" : "off"}`);
+
+        if (psu.triggers) runTriggers(psu.triggers, value);
+    });
 }
 
-function runTriggers(triggers, value) {
+async function runTriggers(triggers, value) {
     for (const trigger of triggers) {
-        const [type, index, reversed] = trigger.split(":");
-        const isReversed = (reversed === "1" || reversed === "true") ? true : false;
-        if (type === "camera") setCamera(index, isReversed ? !value : value); else
-        if (type === "light") setLight(index, isReversed ? !value : value); else
-        if (type === "psu") setPSU(index, isReversed ? !value : value); else
-        throw new Error(`Unknown type '${type}'`);
+        try {
+            const [type, index, reversed] = trigger.split(":");
+            const isReversed = (reversed === "1" || reversed === "true") ? true : false;
+            
+            if (type === "camera") await setCamera(index, isReversed ? !value : value); else
+            if (type === "light") await setLight(index, isReversed ? !value : value); else
+            if (type === "psu") await setPSU(index, isReversed ? !value : value); else
+            throw new Error(`Unknown type '${type}'`);
+        } catch (err) {
+            console.log(`Failed to run trigger '${trigger}': ${err}`);
+        }
     }
 }
 
@@ -378,7 +383,10 @@ class CameraStream extends EventEmitter {
     }
 
     stop() {
-        if (this.state === 1 && this.ffmpegProcess) this.ffmpegProcess.kill("SIGKILL");
+        if (this.ffmpegProcess) {
+            this.ffmpegProcess.kill("SIGKILL");
+            this.state = 0;
+        }
     }
 }
 
@@ -426,7 +434,9 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
 
     cameraStream.on("error", err => {
         console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} had an error:`, err);
-        if (config.cameraRetryInterval) setTimeout(() => cameraStream.start(), config.cameraRetryInterval);
+        if (config.cameraRetryInterval) setTimeout(() => {
+            if (cameraStream.state === 2) cameraStream.start()
+        }, config.cameraRetryInterval);
     });
 
     cameraStreams[cameraIndex] = cameraStream;
