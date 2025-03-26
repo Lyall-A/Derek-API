@@ -18,7 +18,6 @@ function setGpio(pin, value, direction = "output") {
 
 function getGpioValue(pin) {
     if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) return null;
-    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `out`);
     return parseInt(fs.readFileSync(`/sys/class/gpio/gpio${pin}/value`, "utf-8"));
 }
 

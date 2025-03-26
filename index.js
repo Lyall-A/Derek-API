@@ -71,7 +71,7 @@ router.post("/light/:light/", async (req, res, next, params) => {
     if (!config.lights?.[params.light]) return next();
     try {
         if (req.body.state !== undefined) await setLight(params.light, req.body.state);
-        res.json(await getLight(params.light));
+        // res.json(await getLight(params.light));
     } catch (err) {
         res.setStatus(500).json({ error: "Internal Server Error" });
     }
