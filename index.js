@@ -18,6 +18,23 @@ const cameraErrorPath = fs.existsSync(config.cameraErrorPath) ? fs.readFileSync(
 const server = new Server();
 const { router } = server;
 
+router.post("*", async (req, res, next, params) => {
+    return new Promise(resolve => {
+        if (req.headers["content-type"] !== "application/json") return res.setStatus(400).json({ error: "Invalid Content-Type header" });
+        const dataArrayBuffer = [];
+        req.on("data", data => dataArrayBuffer.push(data));
+        req.on("end", () => {
+            try {
+                req.body = JSON.parse(Buffer.concat(dataArrayBuffer));
+                next();
+            } catch (err) {
+                return res.setStatus(400).json({ error: "Invalid body" });
+            }
+            resolve();
+        });
+    });
+});
+
 // PSU
 
 router.get("/psu/:psu/", async (req, res, next, params) => {
@@ -25,27 +42,17 @@ router.get("/psu/:psu/", async (req, res, next, params) => {
     try {
         res.json(await getPSU(params.psu));
     } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
-router.post("/psu/:psu/on/", async (req, res, next, params) => {
+router.post("/psu/:psu/", async (req, res, next, params) => {
     if (!config.psus?.[params.psu]) return next();
     try {
-        await setPSU(params.psu, true);
-        res.sendStatus(204);
+        if (req.body.state !== undefined) await setPSU(params.psu, req.body.state);
+        res.json(await getPSU(params.psu));
     } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/psu/:psu/off/", async (req, res, next, params) => {
-    if (!config.psus?.[params.psu]) return next();
-    try {
-        await setPSU(params.psu, false);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
@@ -56,27 +63,17 @@ router.get("/light/:light/", async (req, res, next, params) => {
     try {
         res.json(await getLight(params.light))
     } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
-router.post("/light/:light/on/", async (req, res, next, params) => {
+router.post("/light/:light/", async (req, res, next, params) => {
     if (!config.lights?.[params.light]) return next();
     try {
-        await setLight(params.light, true);
-        res.sendStatus(204);
+        if (req.body.state !== undefined) await setLight(params.light, req.body.state);
+        res.json(await getLight(params.light));
     } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/light/:light/off/", async (req, res, next, params) => {
-    if (!config.lights?.[params.light]) return next();
-    try {
-        await setLight(params.light, false);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
@@ -87,27 +84,17 @@ router.get("/camera/:camera/", async (req, res, next, params) => {
     try {
         res.json(await getCamera(params.camera))
     } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
 router.post("/camera/:camera/on/", async (req, res, next, params) => {
     if (!config.cameras?.[params.camera]) return next();
     try {
-        await setCamera(params.camera, true);
-        res.sendStatus(204);
+        if (req.body.state !== undefined) await setCamera(params.camera, req.body.state);
+        res.json(await getCamera(params.camera));
     } catch (err) {
-        res.sendStatus(500);
-    }
-});
-
-router.post("/camera/:camera/off/", async (req, res, next, params) => {
-    if (!config.cameras?.[params.camera]) return next();
-    try {
-        await setCamera(params.camera, false);
-        res.sendStatus(204);
-    } catch (err) {
-        res.sendStatus(500);
+        res.setStatus(500).json({ error: "Internal Server Error" });
     }
 });
 
@@ -178,7 +165,7 @@ router.get("/camera/:camera/still/", (req, res, next, params) => {
 });
 
 router.any("*", (req, res) => {
-    res.sendStatus(404);
+    res.setStatus(404).json({ error: "Not Found" });
 });
 
 // Listen
