@@ -9,8 +9,8 @@ const config = require("./config.json");
 
 const cameraStreams = { };
 const cameraClients = { };
-const cameraOffFrame = fs.readFileSync(config.cameraOffPath);
-const cameraErrorPath = fs.readFileSync(config.cameraErrorPath);
+const cameraOffFrame = fs.existsSync(config.cameraOffPath) ? fs.readFileSync(config.cameraOffPath) : null;
+const cameraErrorPath = fs.existsSync(config.cameraErrorPath) ? fs.readFileSync(config.cameraErrorPath) : null;
 
 // API Server
 
@@ -130,6 +130,7 @@ router.post("/light/:light/on/", (req, res, next, params) => {
     if (!light) return next();
     setGpio(light.gpio, true);
     res.sendStatus(204);
+    console.log("[Light]", `${light.name ? `${light.name} (${params.light})` : params.light} turned on`);
 });
 
 router.post("/light/:light/off/", (req, res, next, params) => {
@@ -137,6 +138,7 @@ router.post("/light/:light/off/", (req, res, next, params) => {
     if (!light) return next();
     setGpio(light.gpio, false);
     res.sendStatus(204);
+    console.log("[Light]", `${light.name ? `${light.name} (${params.light})` : params.light} turned off`);
 });
 
 // PSU
@@ -162,7 +164,9 @@ router.post("/psu/0/on/", async (req, res, next, params) => {
 
     const info = data?.system?.set_relay_state;
     if (!info || info.err_code) return res.sendStatus(500);
+
     res.sendStatus(204);
+    console.log("[PSU]", "Turned on");
 });
 
 router.post("/psu/0/off/", async (req, res, next, params) => {
@@ -172,7 +176,9 @@ router.post("/psu/0/off/", async (req, res, next, params) => {
 
     const info = data?.system?.set_relay_state;
     if (!info || info.err_code) return res.sendStatus(500);
+    
     res.sendStatus(204);
+    console.log("[PSU]", "Turned off");
 });
 
 router.any("*", (req, res) => {
@@ -223,6 +229,7 @@ class CameraStream extends EventEmitter {
         this.ffmpegProcess.on("spawn", () => {
             this.state = 1;
             this.startDate = new Date();
+            this.emit("start");
         });
 
         this.ffmpegProcess.stdout.on("data", data => {
@@ -268,9 +275,17 @@ class CameraStream extends EventEmitter {
 
 if (config.cameras) for (const cameraIndex in config.cameras) {
     const camera = config.cameras[cameraIndex];
-    const cameraStream = new CameraStream(camera);
+    const cameraStream = new CameraStream(camera, {
+        ffmpegInputArgs: camera.inputArgs,
+        ffmpegOutputArgs: camera.outputArgs,
+        logs: true
+    });
 
     cameraStream.start();
+
+    cameraStream.on("start", () => {
+        console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} started`);
+    });
 
     cameraStream.on("frame", frame => {
         for (const cameraClient of cameraClients[cameraIndex]) {
@@ -296,7 +311,12 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
         }
     });
 
-    cameraStream.on("error", () => {
+    cameraStream.on("close", () => {
+        console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} closed`);
+    });
+
+    cameraStream.on("error", err => {
+        console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} had an error:`, err);
         if (config.cameraRetryInterval) setTimeout(() => cameraStream.start(), config.cameraRetryInterval);
     });
 

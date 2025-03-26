@@ -16,7 +16,7 @@
     "cameras": [
         {
             "name": "Z-Axis",
-            "path": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            "path": "/dev/video0"
         }
     ]
 }
