@@ -30,6 +30,7 @@ router.post("*", async (req, res, next, params) => {
             } catch (err) {
                 return res.setStatus(400).json({ error: "Invalid body" });
             }
+            
             resolve();
         });
     });
@@ -71,7 +72,7 @@ router.post("/light/:light/", async (req, res, next, params) => {
     if (!config.lights?.[params.light]) return next();
     try {
         if (req.body.state !== undefined) await setLight(params.light, req.body.state);
-        // res.json(await getLight(params.light));
+        res.json(await getLight(params.light));
     } catch (err) {
         res.setStatus(500).json({ error: "Internal Server Error" });
     }

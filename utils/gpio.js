@@ -1,5 +1,7 @@
 const fs = require("fs");
 
+const pinValues = {};
+
 function setGpio(pin, value, direction = "output") {
     // Export pin
     if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) {
@@ -13,12 +15,15 @@ function setGpio(pin, value, direction = "output") {
     }
     
     // Set value
-    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${value === false ? 0 :  value === true ? 1 : value}`);
+    const writeValue = value === false ? 0 :  value === true ? 1 : value;
+    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${writeValue}`);
+    pinValues[pin] = writeValue;
 }
 
 function getGpioValue(pin) {
-    if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) return null;
-    return parseInt(fs.readFileSync(`/sys/class/gpio/gpio${pin}/value`, "utf-8"));
+    return pinValues[pin] ?? null;
+    // if (!fs.existsSync(`/sys/class/gpio/gpio${pin}`)) return null;
+    // return parseInt(fs.readFileSync(`/sys/class/gpio/gpio${pin}/value`, "utf-8"));
 }
 
 module.exports = {
