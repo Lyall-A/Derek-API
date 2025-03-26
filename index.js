@@ -428,28 +428,3 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
     cameraStreams[cameraIndex] = cameraStream;
     cameraClients[cameraIndex] = [];
 }
-
-// TP-Link Smart Home Protocol Proxy
-
-if (config.smartHomeProtocolProxy) {
-    const smartHomeProtocolProxy = net.createServer();
-
-    smartHomeProtocolProxy.on("connection", socket => {
-        const connection = net.createConnection({
-            host: config.plugAddress,
-            port: config.plugPort ?? 9999
-        });
-
-        connection.on("data", data => !socket.write(data) && connection.pause());
-        connection.on("end", () => socket.end());
-        connection.on("drain", () => socket.resume());
-        connection.on("error", () => socket.end());
-
-        socket.on("data", data => !connection.write(data) && socket.pause());
-        socket.on("end", () => connection.end());
-        socket.on("drain", () => connection.resume());
-        socket.on("error", () => connection.end());
-    });
-
-    smartHomeProtocolProxy.listen(9999, () => console.log(`TP-Link Smart Home protocol proxy is running at :${config.plugPort ?? 9999}`));
-}
