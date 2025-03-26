@@ -345,7 +345,7 @@ function setGpio(pin, value, direction = "output") {
         fs.writeFileSync(`/sys/class/gpio/gpio${pin}/direction`, `${writeDirection}`);
     }
     // Set value
-    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${pin}`);
+    fs.writeFileSync(`/sys/class/gpio/gpio${pin}/value`, `${writeValue}`);
 }
 
 function getGpioValue(pin) {
