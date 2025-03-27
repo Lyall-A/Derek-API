@@ -135,7 +135,7 @@ router.get("/camera/:camera/stream/", (req, res, next, params) => {
                 if (client.queue.length) res.write(client.queue.shift());
             }
         }
-    }, 1000 / 1);
+    }, 1000 / 5);
 
     res.setHeader("Content-Type", "multipart/x-mixed-replace; boundary=stream");
 
