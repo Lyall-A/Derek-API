@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Derek</title>
+    </head>
+    <body>
+        <div class="info">
+
+        </div>
+        <div class="cameras"></div>
+
+        <script>
+            const camerasElement = document.querySelector(".cameras");
+
+            fetch("/cameras").then(i => i.json()).then(cameras => {
+                for (const cameraIndex in cameras) {
+                    if (!cameras[cameraIndex]) continue;
+
+                    const cameraElement = document.createElement("div");
+
+                    const imgElement = document.createElement("img");
+                    imgElement.src = `/camera/${cameraIndex}/stream`;
+                    cameraElement.appendChild(imgElement);
+
+                    camerasElement.appendChild(cameraElement);
+                }
+            });
+        </script>
+
+        <style>
+
+        </style>
+    </body>
+</html>

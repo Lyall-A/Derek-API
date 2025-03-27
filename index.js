@@ -1,13 +1,15 @@
-const net = require("net");
 const fs = require("fs");
 
-const { Server, Router } = require("http-js");
+const { Server } = require("http-js");
 const { sendSmartHomeProtocolCommand } = require("./utils/tp-link-smart-home-protocol");
 const { getGpioValue, setGpio } = require("./utils/gpio.js");
+const OctoPrint = require("./utils/OctoPrint.js");
 const CameraStream = require("./utils/CameraStream");
 
 const config = require("./config.json");
 
+// const mainPage = fs.readFileSync("./index.html", "utf-8");
+const octoPrint = new OctoPrint(`http://${config.octoprintAddress ?? "127.0.0.1"}:${config.octoprintPort ?? 5000}`, config.octoprintApiKey);
 const cameraStreams = { };
 const cameraClients = { };
 const cameraOffFrame = fs.existsSync(config.cameraOffPath) ? fs.readFileSync(config.cameraOffPath) : null;
@@ -18,6 +20,13 @@ const cameraErrorPath = fs.existsSync(config.cameraErrorPath) ? fs.readFileSync(
 const server = new Server();
 const { router } = server;
 
+// Authorization
+router.any("*", (req, res, next, params) => {
+    // if (config.basicAuthorization && req.headers["authorization"] !== config.basicAuthorization) return res.setStatus(401).json({ error: "Authorization is required" });
+    next();
+});
+
+// POST request validation
 router.post("*", async (req, res, next, params) => {
     return new Promise(resolve => {
         if (req.headers["content-type"] !== "application/json") return res.setStatus(400).json({ error: "Invalid Content-Type header" });
@@ -36,7 +45,45 @@ router.post("*", async (req, res, next, params) => {
     });
 });
 
+// router.get("/", (req, res) => res.html(mainPage));
+
+// OctoPrint
+
+router.post("/send", async (req, res) => {
+    if (!req.body.command) return res.setStatus(400).json({ error: "Missing command" });
+    octoPrint.sendCommand(req.body.command).then(i => {
+        if (i.status !== 204) return res.setStatus(500).json({ error: "Internal Server Error" });
+        res.sendStatus(204);
+    }).catch(err => {
+        res.setStatus(500).json({ error: "Internal Server Error" });
+    });
+});
+
+router.post("/job", async (req, res) => {
+    octoPrint.sendJob(req.body).then(i => {
+        if (i.status !== 204) return res.setStatus(500).json({ error: "Internal Server Error" });
+        res.sendStatus(204);
+    }).catch(err => {
+        res.setStatus(500).json({ error: "Internal Server Error" });
+    });
+});
+
+router.get("/job", async (req, res) => {
+    octoPrint.getJob().then(job => {
+        if (res.status !== 200) return res.setStatus(500).json({ error: "Internal Server Error" });
+        res.json(job.json);
+    }).catch(err => {
+        res.setStatus(500).json({ error: "Internal Server Error" });
+    });
+});
+
 // PSU
+
+router.get("/psus", async (req, res, next, params) => {
+    const psus = [];
+    for (const psuIndex in config.psus) psus.push(await getPSU(psuIndex).catch(err => null));
+    res.json(psus);
+});
 
 router.get("/psu/:psu/", async (req, res, next, params) => {
     if (!config.psus?.[params.psu]) return next();
@@ -59,6 +106,12 @@ router.post("/psu/:psu/", async (req, res, next, params) => {
 
 // Light
 
+router.get("/lights", async (req, res, next, params) => {
+    const lights = [];
+    for (const lightIndex in config.lights) lights.push(await getLight(lightIndex).catch(err => null));
+    res.json(lights);
+});
+
 router.get("/light/:light/", async (req, res, next, params) => {
     if (!config.lights?.[params.light]) return next();
     try {
@@ -79,6 +132,12 @@ router.post("/light/:light/", async (req, res, next, params) => {
 });
 
 // Camera
+
+router.get("/cameras", async (req, res, next, params) => {
+    const cameras = [];
+    for (const cameraIndex in config.cameras) cameras.push(await getCamera(cameraIndex).catch(err => null));
+    res.json(cameras);
+});
 
 router.get("/camera/:camera/", async (req, res, next, params) => {
     if (!config.cameras?.[params.camera]) return next();
