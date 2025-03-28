@@ -206,7 +206,7 @@ router.get("/camera/:camera/still/", (req, res, next, params) => {
         const frame = cameraStream.state === 0 ? cameraOffFrame : cameraStream.state === 2 ? cameraErrorPath : null;
         if (!frame) return res.sendStatus(204);
 
-        return client.send(createMultipartFrame(frame));
+        return res.send(frame, "image/jpeg");
     }
 
     if (cameraStream.lastFrame) {
