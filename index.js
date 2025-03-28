@@ -458,10 +458,17 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
         for (const cameraClient of cameraClients[cameraIndex]) cameraClient.send(multipartFrame);
     });
 
+    cameraStream.on("close", () => {
+        // Restart stream if ended for no reason
+        if (cameraStream.state === 0 && config.cameraRetryInterval) setTimeout(() => {
+            if (cameraStream.state === 0) cameraStream.start();
+        }, config.cameraRetryInterval);
+    });
+
     cameraStream.on("error", err => {
         console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} had an error:`, err);
         if (config.cameraRetryInterval) setTimeout(() => {
-            if (cameraStream.state === 2) cameraStream.start()
+            if (cameraStream.state === 2) cameraStream.start();
         }, config.cameraRetryInterval);
     });
 

@@ -82,12 +82,12 @@ class CameraStream extends EventEmitter {
                 }
             }
             
+            this.emit("close", code);
+
             this.log = null;
             this.ffmpegProcess = null;
             this.lastFrame = null;
             this.startDate = null;
-
-            this.emit("close", code);
         });
     }
 
