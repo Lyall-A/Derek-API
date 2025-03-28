@@ -324,7 +324,7 @@ function setPSU(psuIndex, value) {
     
             if (!psu.type || psu.type === "gpio") {
                 setGpio(psu.gpio, value);
-            } else if (psu.type === "smarthomeprotocol") {
+            } else if (psu.type === "tp-link") {
                 const data = await sendSmartHomeProtocolCommand(psu.address, { system: { set_relay_state: { state: value ? 1 : 0 } } }).catch(err => {
                     console.log("Error sending Smart Home Protocol command:", err);
                     return reject();
