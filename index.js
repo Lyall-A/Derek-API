@@ -452,10 +452,6 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
 
     cameraStream.start();
 
-    cameraStream.on("start", () => {
-        console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} started`);
-    });
-
     cameraStream.on("frame", frame => {
         const multipartFrame = createMultipartFrame(frame);
 
