@@ -148,7 +148,7 @@ router.get("/camera/:camera/", async (req, res, next, params) => {
     }
 });
 
-router.post("/camera/:camera/on/", async (req, res, next, params) => {
+router.post("/camera/:camera/", async (req, res, next, params) => {
     if (!config.cameras?.[params.camera]) return next();
     try {
         if (req.body.state !== undefined) await setCamera(params.camera, req.body.state);
