@@ -167,36 +167,25 @@ router.get("/camera/:camera/stream/", (req, res, next, params) => {
     const client = {
         req,
         res,
+        send: data => clientSend(data, client),
         queue: [],
         writing: false
     };
 
+    res.setHeader("Content-Type", "multipart/x-mixed-replace; boundary=stream");
+
+    // Send last frame
+    if (cameraStream.lastFrame) {
+        client.send(createMultipartFrame(cameraStream.lastFrame));
+    }
+
+    // Send custom frames if camera is inactive
     const noFrameInterval = setInterval(() => {
         const frame = cameraStream.state === 0 ? cameraOffFrame : cameraStream.state === 2 ? cameraErrorPath : null;
         if (!frame) return;
 
-        const data = Buffer.concat([
-            Buffer.from(`--stream\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.byteLength}\r\n\r\n`),
-            frame,
-            Buffer.from("\r\n\r\n")
-        ]);
-
-        if (client.writing) {
-            return client.queue.push(data);
-        } else {
-            if (!res.write(data)) {
-                client.writing = true;
-                res.once("drain", () => {
-                    client.writing = false;
-                    if (client.queue.length) res.write(client.queue.shift());
-                });
-            } else {
-                if (client.queue.length) res.write(client.queue.shift());
-            }
-        }
+        client.send(createMultipartFrame(frame));
     }, 1000 / 5);
-
-    res.setHeader("Content-Type", "multipart/x-mixed-replace; boundary=stream");
 
     req.on("close", () => {
         const clientIndex = cameraClients[params.camera].indexOf(client);
@@ -299,7 +288,7 @@ function getPSU(psuIndex) {
                 resolve({
                     state: getGpioValue(psu.gpio)
                 });
-            } else if (psu.type === "smarthomeprotocol") {
+            } else if (psu.type === "tp-link") {
                 const data = await sendSmartHomeProtocolCommand(psu.address, { system: { get_sysinfo: null } }).catch(err => {
                     console.log("Error sending Smart Home Protocol command:", err);
                     return reject();
@@ -421,6 +410,30 @@ function setCamera(cameraIndex, value) {
     });
 }
 
+function clientSend(data, client) {
+    if (client.writing) {
+        return client.queue.push(data);
+    } else {
+        if (!client.res.write(data)) {
+            client.writing = true;
+            client.res.once("drain", () => {
+                client.writing = false;
+                if (client.queue.length) clientSend(client.queue.shift(), client);
+            });
+        } else {
+            if (client.queue.length) clientSend(client.queue.shift(), client);
+        }
+    }
+}
+
+function createMultipartFrame(frame) {
+    return Buffer.concat([
+        Buffer.from(`--stream\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.byteLength}\r\n\r\n`),
+        frame,
+        Buffer.from("\r\n\r\n")
+    ]);
+}
+
 // Camera streams
 
 if (config.cameras) for (const cameraIndex in config.cameras) {
@@ -428,7 +441,8 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
     const cameraStream = new CameraStream(camera, {
         ffmpegInputArgs: camera.inputArgs,
         ffmpegOutputArgs: camera.outputArgs,
-        logs: false
+        storeLastFrame: camera.storeLastFrame,
+        logs: true
     });
 
     cameraStream.start();
@@ -438,27 +452,9 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
     });
 
     cameraStream.on("frame", frame => {
-        for (const cameraClient of cameraClients[cameraIndex]) {
-            const data = Buffer.concat([
-                Buffer.from(`--stream\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.byteLength}\r\n\r\n`),
-                frame,
-                Buffer.from("\r\n\r\n")
-            ]);
+        const multipartFrame = createMultipartFrame(frame);
 
-            if (cameraClient.writing) {
-                return cameraClient.queue.push(data);
-            } else {
-                if (!cameraClient.res.write(data)) {
-                    cameraClient.writing = true;
-                    cameraClient.res.once("drain", () => {
-                        cameraClient.writing = false;
-                        if (cameraClient.queue.length) cameraClient.res.write(cameraClient.queue.shift());
-                    });
-                } else {
-                    if (cameraClient.queue.length) cameraClient.res.write(cameraClient.queue.shift());
-                }
-            }
-        }
+        for (const cameraClient of cameraClients[cameraIndex]) cameraClient.send(multipartFrame);
     });
 
     cameraStream.on("close", () => {
