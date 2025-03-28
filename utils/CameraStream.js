@@ -23,10 +23,10 @@ class CameraStream extends EventEmitter {
     logs = false;
     logSize = 1024;
     
+    state = 0;
     log = "";
     ffmpegProcess = null;
     lastFrame = null;
-    state = 0;
     startDate = null;
 
     start() {
@@ -81,6 +81,12 @@ class CameraStream extends EventEmitter {
                     this.state = 0;
                 }
             }
+            
+            this.log = null;
+            this.ffmpegProcess = null;
+            this.lastFrame = null;
+            this.startDate = null;
+
             this.emit("close", code);
         });
     }
