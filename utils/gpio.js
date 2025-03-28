@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const pinValues = {};
+const pinValues = { }; // In my case reading the value of a pin sets the value to 0, so we are just storing the values here
 
 function setGpio(pin, value, direction = "output") {
     // Export pin
