@@ -462,10 +462,6 @@ if (config.cameras) for (const cameraIndex in config.cameras) {
         for (const cameraClient of cameraClients[cameraIndex]) cameraClient.send(multipartFrame);
     });
 
-    cameraStream.on("close", () => {
-        console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} closed`);
-    });
-
     cameraStream.on("error", err => {
         console.log("[Camera]", `${camera.name ? `${camera.name} (${cameraIndex})` : cameraIndex} had an error:`, err);
         if (config.cameraRetryInterval) setTimeout(() => {
