@@ -12,8 +12,8 @@ const config = require("./config.json");
 const octoPrint = new OctoPrint(`http://${config.octoprintAddress ?? "127.0.0.1"}:${config.octoprintPort ?? 5000}`, config.octoprintApiKey);
 const cameraStreams = { };
 const cameraClients = { };
-const cameraOffFrame = fs.existsSync(config.cameraOffPath) ? fs.readFileSync(config.cameraOffPath) : null;
-const cameraErrorPath = fs.existsSync(config.cameraErrorPath) ? fs.readFileSync(config.cameraErrorPath) : null;
+const cameraOffFrame = (config.cameraOffPath && fs.existsSync(config.cameraOffPath)) ? fs.readFileSync(config.cameraOffPath) : null;
+const cameraErrorPath = (config.cameraErrorPath && fs.existsSync(config.cameraErrorPath)) ? fs.readFileSync(config.cameraErrorPath) : null;
 
 // API Server
 
@@ -202,7 +202,12 @@ router.get("/camera/:camera/still/", (req, res, next, params) => {
 
     const cameraStream = cameraStreams[params.camera];
 
-    if (cameraStream.state !== 1) return res.sendStatus(204);
+    if (cameraStream.state !== 1) {
+        const frame = cameraStream.state === 0 ? cameraOffFrame : cameraStream.state === 2 ? cameraErrorPath : null;
+        if (!frame) return res.sendStatus(204);
+
+        return client.send(createMultipartFrame(frame));
+    }
 
     if (cameraStream.lastFrame) {
         res.send(cameraStream.lastFrame, "image/jpeg");
